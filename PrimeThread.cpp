@@ -85,7 +85,7 @@ void setPrimesSimple(Bounds bounds){
 //Driver function
 int main(){
     //vector<thread> threadList;
-    int maxThread = 10;
+    int maxThread = 8;
     vector<Bounds> boundList;
     sieve = vector<bool>();
     thread threads[maxThread];
