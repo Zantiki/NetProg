@@ -7,6 +7,7 @@
 #include <functional>
 #include <chrono>
 #include <condition_variable>
+#include <atomic>
 
 //TODO: Implement condition variable and stop method.
 
@@ -16,8 +17,10 @@ class Workers{
 public:
     vector<thread> threads = vector<thread>();
     vector<function<void()>> tasks = vector<function<void()>>();
-    int count;
-    //condition_variable cv;
+    atomic_bool kill = ATOMIC_VAR_INIT(false);
+    mutex mtx;
+    unsigned int count;
+    condition_variable cv;
     chrono::duration<double, milli> timeout;
 
     Workers(){
@@ -28,15 +31,29 @@ public:
         this->count = count;
     }
 
-    void start(){
-        condition_variable cv;
+    void doTask(){
+        while(!kill){
+            unique_lock<mutex> lock(mtx);
+            if(!tasks.empty()) {
+                auto task = *tasks.begin();
+                tasks.erase(tasks.begin());
+                task();
+            }else{
+                if(kill){
+                    return;
+                }
+                cv.wait(lock);
+            }
+        }
+    }
 
+    /*void start(){
         while(threads.size() < count){
             if(!tasks.empty()){
                 auto task =  *tasks.begin();
                 tasks.erase(tasks.begin());
-                thread temp = thread([&task, &cv]{
-                    task();
+                thread temp = thread([this]{
+                    doTask();
                 });
                 threads.push_back(temp);
             }else{
@@ -47,12 +64,26 @@ public:
             }
 
         }
+    }*/
+
+    void start(){
+        while(threads.size() < count){
+            thread temp = thread([this]{
+                doTask();
+            });
+            threads.push_back(move(temp));
+        }
     }
+
     void stop(){
-
+        cv.notify_all();
+        kill = true;
+        for(auto &&t:threads){
+            t.join();
+        }
     }
 
-    void post(function<void()> func ){
+    /*void post(function<void()> func ){
         std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
         chrono::duration<double, milli> duration = end-start;
@@ -66,16 +97,27 @@ public:
                     return;
                 }
             }
-        end = std::chrono::steady_clock::now();
-        duration = end-start;
+            end = std::chrono::steady_clock::now();
+            duration = end-start;
         }
         cout<< "timed out" <<endl;
         return;
         //Replace finished thread
 
+    }*/
+
+    void post(function<void()> func){
+        cout << "Task posted" << endl;
+        tasks.push_back([&func, this]{
+
+            this_thread::sleep_for(timeout);
+            func();
+
+        });
     }
 
     void post_timeout(int ms){
+        cout << "Timeout set to" << ms << " milliseconds" << endl;
         timeout = chrono::milliseconds(ms);
     }
 };
@@ -86,21 +128,19 @@ int main(){
     worker_threads.start(); // Create 4 internal threads
     event_loop.start(); // Create 1 internal thread
     worker_threads.post([] {
-                    // Task A
+        cout << "task A started" << endl;
     });
     worker_threads.post([] {
-// Task B
-// Might run in parallel with task A
+        cout << "task B started" << endl;
     });
     event_loop.post([] {
-// Task C
-// Might run in parallel with task A and B
+        cout << "task C started" << endl;
     });
     event_loop.post([] {
-// Task D
-// Will run after task C
-// Mig
+        cout << "task D started" << endl;
     });
+    worker_threads.stop();
+    event_loop.stop();
 return 0;
 }
 
