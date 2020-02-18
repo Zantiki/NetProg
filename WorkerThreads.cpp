@@ -33,17 +33,24 @@ public:
 
     void doTask(){
         while(!kill){
-            unique_lock<mutex> lock(mtx);
-            if(!tasks.empty()) {
-                auto task = *tasks.begin();
-                tasks.erase(tasks.begin());
-                task();
-            }else{
-                if(kill){
-                    return;
+            function<void()> task;
+            {
+                unique_lock<mutex> lock(mtx);
+                if(!tasks.empty()) {
+                    task = *tasks.begin();
+                    //tasks.pop_front();
+                    tasks.erase(tasks.begin());
+                }else{
+                    if(kill){
+                        return;
+                    }
+                    cv.wait(lock);
                 }
-                cv.wait(lock);
             }
+            if(task){
+                task();
+            }
+
         }
     }
 
@@ -76,8 +83,8 @@ public:
     }
 
     void stop(){
-        cv.notify_all();
         kill = true;
+        cv.notify_all();
         for(auto &&t:threads){
             t.join();
         }
@@ -107,17 +114,17 @@ public:
     }*/
 
     void post(function<void()> func){
-        cout << "Task posted" << endl;
+        lock_guard<mutex> lock(mtx);
         tasks.push_back([&func, this]{
-
-            this_thread::sleep_for(timeout);
+            //this_thread::sleep_for(timeout);
             func();
-
         });
+       // cout << "Tasks: " << tasks.size() << endl;
+        cv.notify_one();
     }
 
     void post_timeout(int ms){
-        cout << "Timeout set to" << ms << " milliseconds" << endl;
+        cout << "Timeout set to " << ms << " milliseconds" << endl;
         timeout = chrono::milliseconds(ms);
     }
 };
@@ -125,8 +132,11 @@ public:
 int main(){
     Workers worker_threads(4);
     Workers event_loop(1);
+    event_loop.post_timeout(1000);
+    worker_threads.post_timeout(1000);
     worker_threads.start(); // Create 4 internal threads
     event_loop.start(); // Create 1 internal thread
+
     worker_threads.post([] {
         cout << "task A started" << endl;
     });
