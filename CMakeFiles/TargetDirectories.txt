@@ -1,0 +1,3 @@
+/home/madsen/seb/NetProg/CMakeFiles/rebuild_cache.dir
+/home/madsen/seb/NetProg/CMakeFiles/NetProg.dir
+/home/madsen/seb/NetProg/CMakeFiles/edit_cache.dir
