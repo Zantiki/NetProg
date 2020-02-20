@@ -9,7 +9,10 @@
 #include <condition_variable>
 #include <atomic>
 
-//TODO: Implement condition variable and stop method.
+//TODO: Fix exit code 66.
+//TODO: All reads at same thread (D)?????;
+//TODO: Fix post_timeout
+
 
 using namespace std;
 //Worker classes:
@@ -17,37 +20,41 @@ class Workers{
 public:
     vector<thread> threads = vector<thread>();
     vector<function<void()>> tasks = vector<function<void()>>();
-    atomic_bool kill = ATOMIC_VAR_INIT(false);
+    bool kill = false;
     mutex mtx;
     unsigned int count;
+    unsigned int tasksCount = 0;
     condition_variable cv;
     chrono::duration<double, milli> timeout;
 
-    Workers(){
+    /*Workers(){
         cout << "no arguments "<< endl;
-    }
+    }*/
 
     Workers(int count){
         this->count = count;
     }
 
     void doTask(){
-        while(!kill){
+        while(true){
+            cout<<"Waiting..."<<endl;
             function<void()> task;
             {
-                unique_lock<mutex> lock(mtx);
+               unique_lock<mutex> lock(mtx);
                 if(!tasks.empty()) {
-                    task = *tasks.begin();
-                    //tasks.pop_front();
+                   task = *tasks.begin();
+                    tasks.pop_front();
+                    cout << tasks.size() <<endl;
                     tasks.erase(tasks.begin());
                 }else{
                     if(kill){
                         return;
                     }
-                    cv.wait(lock);
+                   cv.wait(lock);
                 }
             }
             if(task){
+                cout << "doing task" << endl;
                 task();
             }
 
@@ -115,11 +122,15 @@ public:
 
     void post(function<void()> func){
         lock_guard<mutex> lock(mtx);
-        tasks.push_back([&func, this]{
+        unsigned int count2 = tasksCount;
+        tasks.emplace_back([&func, this, &count2]{
             //this_thread::sleep_for(timeout);
+            cout<< &((func))  << count2 << endl;
             func();
         });
        // cout << "Tasks: " << tasks.size() << endl;
+        tasksCount++;
+        cout<< "Posted new task:" << tasksCount << endl;
         cv.notify_one();
     }
 
@@ -149,8 +160,10 @@ int main(){
     event_loop.post([] {
         cout << "task D started" << endl;
     });
-    worker_threads.stop();
-    event_loop.stop();
+   worker_threads.stop();
+   event_loop.stop();
+   cout << &((event_loop)) << "\n" <<endl;
+   cout << &((worker_threads));
 return 0;
 }
 
