@@ -7,7 +7,6 @@
 #include <functional>
 #include <chrono>
 #include <condition_variable>
-#include <atomic>
 
 //TODO: Fix exit code 66.
 //TODO: All reads at same thread (D)?????;
@@ -17,9 +16,9 @@
 using namespace std;
 //Worker classes:
 class Workers{
-public:
-    vector<thread> threads = vector<thread>();
-    vector<function<void()>> tasks = vector<function<void()>>();
+private:
+    vector<thread> threads;
+    vector<function<void()>> tasks;
     bool kill = false;
     mutex mtx;
     unsigned int count;
@@ -30,20 +29,21 @@ public:
     /*Workers(){
         cout << "no arguments "<< endl;
     }*/
-
+public:
     Workers(int count){
         this->count = count;
     }
 
     void doTask(){
+        cout << this_thread::get_id() << "\n" << endl;
         while(true){
-            cout<<"Waiting..."<<endl;
             function<void()> task;
             {
                unique_lock<mutex> lock(mtx);
+                cout << &((tasks)) << "\n" << endl;
                 if(!tasks.empty()) {
                    task = *tasks.begin();
-                    tasks.pop_front();
+                   // tasks.pop_front();
                     cout << tasks.size() <<endl;
                     tasks.erase(tasks.begin());
                 }else{
@@ -54,7 +54,6 @@ public:
                 }
             }
             if(task){
-                cout << "doing task" << endl;
                 task();
             }
 
@@ -125,12 +124,11 @@ public:
         unsigned int count2 = tasksCount;
         tasks.emplace_back([&func, this, &count2]{
             //this_thread::sleep_for(timeout);
-            cout<< &((func))  << count2 << endl;
             func();
         });
        // cout << "Tasks: " << tasks.size() << endl;
         tasksCount++;
-        cout<< "Posted new task:" << tasksCount << endl;
+        cout<< "\nPosted new task:" << tasksCount << endl;
         cv.notify_one();
     }
 
@@ -142,7 +140,9 @@ public:
 
 int main(){
     Workers worker_threads(4);
+    cout << "Worker threads" << &(worker_threads) << endl;
     Workers event_loop(1);
+    cout <<"Event loop: " << &(event_loop) << endl;
     event_loop.post_timeout(1000);
     worker_threads.post_timeout(1000);
     worker_threads.start(); // Create 4 internal threads
