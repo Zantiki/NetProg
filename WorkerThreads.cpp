@@ -15,11 +15,11 @@
 
 
 using namespace std;
-//Worker classes:
+
 class Workers{
-public:
-    vector<thread> threads = vector<thread>();
-    vector<function<void()>> tasks = vector<function<void()>>();
+private:
+    vector<thread> threads;
+    vector<function<void()>> tasks;
     bool kill = false;
     mutex mtx;
     unsigned int count;
@@ -27,24 +27,19 @@ public:
     condition_variable cv;
     chrono::duration<double, milli> timeout;
 
-    /*Workers(){
-        cout << "no arguments "<< endl;
-    }*/
-
+public:	
     Workers(int count){
         this->count = count;
     }
 
     void doTask(){
+	cout << "start thread " << this_thread::get_id() << endl;
         while(true){
-            cout<<"Waiting..."<<endl;
             function<void()> task;
             {
                unique_lock<mutex> lock(mtx);
                 if(!tasks.empty()) {
                    task = *tasks.begin();
-                    tasks.pop_front();
-                    cout << tasks.size() <<endl;
                     tasks.erase(tasks.begin());
                 }else{
                     if(kill){
@@ -54,31 +49,11 @@ public:
                 }
             }
             if(task){
-                cout << "doing task" << endl;
                 task();
             }
 
         }
     }
-
-    /*void start(){
-        while(threads.size() < count){
-            if(!tasks.empty()){
-                auto task =  *tasks.begin();
-                tasks.erase(tasks.begin());
-                thread temp = thread([this]{
-                    doTask();
-                });
-                threads.push_back(temp);
-            }else{
-                thread temp = thread([]{
-                    cout << "Thread initialized" << endl;
-                });
-                threads.push_back(temp);
-            }
-
-        }
-    }*/
 
     void start(){
         while(threads.size() < count){
@@ -97,45 +72,14 @@ public:
         }
     }
 
-    /*void post(function<void()> func ){
-        std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        chrono::duration<double, milli> duration = end-start;
-        tasks.push_back(func);
-
-        while( duration <= timeout){
-            for(auto &&threadI:threads){
-                if(threadI.joinable()) {
-                    thread temp = thread(func);
-                    threadI.swap(temp);
-                    return;
-                }
-            }
-            end = std::chrono::steady_clock::now();
-            duration = end-start;
-        }
-        cout<< "timed out" <<endl;
-        return;
-        //Replace finished thread
-
-    }*/
-
     void post(function<void()> func){
         lock_guard<mutex> lock(mtx);
-        unsigned int count2 = tasksCount;
-        tasks.emplace_back([&func, this, &count2]{
-            //this_thread::sleep_for(timeout);
-            cout<< &((func))  << count2 << endl;
-            func();
-        });
-       // cout << "Tasks: " << tasks.size() << endl;
-        tasksCount++;
-        cout<< "Posted new task:" << tasksCount << endl;
+        tasks.emplace_back(func);
         cv.notify_one();
     }
 
     void post_timeout(int ms){
-        cout << "Timeout set to " << ms << " milliseconds" << endl;
+        //cout << "Timeout set to " << ms << " milliseconds" << endl;
         timeout = chrono::milliseconds(ms);
     }
 };
@@ -149,16 +93,16 @@ int main(){
     event_loop.start(); // Create 1 internal thread
 
     worker_threads.post([] {
-        cout << "task A started" << endl;
+        cout << "a done by " << this_thread::get_id() << endl;
     });
     worker_threads.post([] {
-        cout << "task B started" << endl;
+        cout << "b done by " << this_thread::get_id() << endl;
     });
     event_loop.post([] {
-        cout << "task C started" << endl;
+        cout << "c done by " << this_thread::get_id() << endl;
     });
     event_loop.post([] {
-        cout << "task D started" << endl;
+        cout << "d done by " << this_thread::get_id() << endl;
     });
    worker_threads.stop();
    event_loop.stop();
