@@ -7,12 +7,6 @@
 #include <functional>
 #include <chrono>
 #include <condition_variable>
-#include <atomic>
-
-//TODO: Fix exit code 66.
-//TODO: All reads at same thread (D)?????;
-//TODO: Fix post_timeout
-
 
 using namespace std;
 
@@ -25,7 +19,6 @@ private:
     unsigned int count;
     unsigned int tasksCount = 0;
     condition_variable cv;
-    chrono::duration<double, milli> timeout;
 
 public:	
     Workers(int count){
@@ -65,32 +58,61 @@ public:
     }
 
     void stop(){
-        kill = true;
-        cv.notify_all();
-        for(auto &&t:threads){
-            t.join();
+        bool listen = true;
+        while (listen) {
+            {
+                lock_guard<mutex> lock(mtx);
+                if (tasks.empty()) {
+                    kill = true;
+                    listen = false;
+                }
+            }
+            if (!listen) {
+                cv.notify_all();
+                for (auto &&t:threads) {
+                    t.join();
+                }
+            }
         }
+
     }
 
-    void post(function<void()> func){
+
+    void post(function<void()> func) {
         lock_guard<mutex> lock(mtx);
         tasks.emplace_back(func);
         cv.notify_one();
     }
 
-    void post_timeout(int ms){
-        //cout << "Timeout set to " << ms << " milliseconds" << endl;
-        timeout = chrono::milliseconds(ms);
+    void post_timeout(int time, function<void()> func) {
+        post([time, func] {
+            {
+                chrono::milliseconds timeout(time);
+                if (timeout != 0ms) {
+                    cout << "Task has timeout: " << timeout.count() << endl;
+                    this_thread::sleep_for(timeout);
+                    func();
+                } else {
+                    func();
+                }
+
+            }
+        });
     }
 };
 
-int main(){
+int main() {
     Workers worker_threads(4);
     Workers event_loop(1);
-    event_loop.post_timeout(1000);
-    worker_threads.post_timeout(1000);
     worker_threads.start(); // Create 4 internal threads
     event_loop.start(); // Create 1 internal thread
+
+    event_loop.post_timeout(3000, [] {
+        cout << "Timeout by " << this_thread::get_id() << endl;
+    });
+    worker_threads.post_timeout(3000, [] {
+        cout << "Timeout by " << this_thread::get_id() << endl;
+    });
 
     worker_threads.post([] {
         cout << "a done by " << this_thread::get_id() << endl;
@@ -106,8 +128,6 @@ int main(){
     });
    worker_threads.stop();
    event_loop.stop();
-   cout << &((event_loop)) << "\n" <<endl;
-   cout << &((worker_threads));
 return 0;
 }
 
