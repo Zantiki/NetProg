@@ -10,35 +10,37 @@
 
 using namespace std;
 
-class Workers{
+class Workers {
 private:
     vector<thread> threads;
     vector<function<void()>> tasks;
     bool kill = false;
-    mutex mtx;
     unsigned int count;
     unsigned int tasksCount = 0;
-    condition_variable cv;
 
-public:	
-    Workers(int count){
+public:
+    condition_variable cv;
+    mutex mtx;
+
+    Workers(int count) {
         this->count = count;
     }
 
-    void doTask(){
-	cout << "start thread " << this_thread::get_id() << endl;
-        while(true){
+    //Task method available for all threads.
+    void doTask() {
+        cout << "start thread " << this_thread::get_id() << endl;
+        while (true) {
             function<void()> task;
             {
-               unique_lock<mutex> lock(mtx);
+                unique_lock<mutex> lock(mtx);
                 if(!tasks.empty()) {
-                   task = *tasks.begin();
+                    task = *tasks.begin();
                     tasks.erase(tasks.begin());
                 }else{
                     if(kill){
                         return;
                     }
-                   cv.wait(lock);
+                    cv.wait(lock);
                 }
             }
             if(task){
@@ -48,8 +50,10 @@ public:
         }
     }
 
+    //Initialize all threads
     void start(){
         while(threads.size() < count){
+            //Include object to make doTask() available
             thread temp = thread([this]{
                 doTask();
             });
@@ -57,16 +61,20 @@ public:
         }
     }
 
+
     void stop(){
+        //Help-variable only present in parent thread, dependent on tasks.
         bool listen = true;
         while (listen) {
             {
+                //Lock and check task-state, kill children and end loop if empty.
                 lock_guard<mutex> lock(mtx);
                 if (tasks.empty()) {
                     kill = true;
                     listen = false;
                 }
             }
+            //Join all threads on empty tasklist
             if (!listen) {
                 cv.notify_all();
                 for (auto &&t:threads) {
@@ -78,12 +86,14 @@ public:
     }
 
 
+    //Lock and post a new task before notifying a thread.
     void post(function<void()> func) {
         lock_guard<mutex> lock(mtx);
         tasks.emplace_back(func);
         cv.notify_one();
     }
 
+    //Same as above, just with user-defined timeout embedded.
     void post_timeout(int time, function<void()> func) {
         post([time, func] {
             {
@@ -101,17 +111,17 @@ public:
     }
 };
 
-int main() {
+/*int main() {
     Workers worker_threads(4);
     Workers event_loop(1);
     worker_threads.start(); // Create 4 internal threads
     event_loop.start(); // Create 1 internal thread
 
-    event_loop.post_timeout(3000, [] {
-        cout << "Timeout by " << this_thread::get_id() << endl;
+    event_loop.post_timeout(2000, [] {
+        cout << "Timeout by A " << this_thread::get_id() << endl;
     });
     worker_threads.post_timeout(3000, [] {
-        cout << "Timeout by " << this_thread::get_id() << endl;
+        cout << "Timeout by B " << this_thread::get_id() << endl;
     });
 
     worker_threads.post([] {
@@ -129,6 +139,6 @@ int main() {
    worker_threads.stop();
    event_loop.stop();
 return 0;
-}
+}*/
 
 
