@@ -12,15 +12,15 @@
 #include <fcntl.h> // for open
 #include <unistd.h> // for close
 #include<pthread.h>
+#include <sstream>
 
 using namespace std;
 
-//TODO: Hva gjør vi med mtx????
 
 class Server {
 public:
-    Workers taskHandlers = Workers(10);
-    Workers eventListener = Workers(1);
+    /*Workers taskHandlers = Workers(10);
+    Workers eventListener = Workers(1);*/
     int socket1 = socket(AF_INET, SOCK_STREAM, 0);
     int socket2;
     int clients;
@@ -28,16 +28,15 @@ public:
     struct sockaddr_storage serverStorage;
     socklen_t addr_size;
     bool kill = false;
+    char buffer[1024];
 
     Server(int threads) {
         clients = threads;
-        /*taskHandlers(threads);
-        eventListener(1);*/
         try {
             // Address family = Internet
             serverAddr.sin_family = AF_INET;
             //Set port number, using htons function to use proper byte order
-            serverAddr.sin_port = htons(7799);
+            serverAddr.sin_port = htons(8080);
             //Set IP address to localhost
             serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
             //Set all bits of the padding field to 0
@@ -52,48 +51,107 @@ public:
         //workers(threads);
     }
 
-    void start() {
-        eventListener.start();
-        eventListener.post([this] {
-            cout << "kill server?"
-            while (!this.kill) {
-                cin >> input;
-                if (input == "y" || input == "yes") {
-                    this.kill = true;
-                    this.stop();
-                }
-            }
-        })
-        taskHandlers.start();
-
-        if (listen(socket1, clients) == 0)
-            printf("Listening\n");
-        else
-            printf("Error\n");
-        int i = 0;
+    void basicCalculation() {
+        cout << "Servermode: Basic Calculation" << endl;
+        kill = false;
+        string input;
         while (!kill) {
-
+            cout << socket2 << endl;
+            if (listen(socket1, clients) == 0)
+                printf("Listening\n");
+            else
+                printf("Error\n");
             addr_size = sizeof serverStorage;
             socket2 = accept(socket1, (struct sockaddr *) &serverStorage, &addr_size);
+            //cout << socket2 << " Connected" << endl;
+            //send(socket2, msg, strlen(msg), 0 );
+            int res = read(socket2, buffer, 1024);
+            cout << buffer << endl;
+            int result = parseExpressionAndCalculate(buffer);
 
-            taskHandlers.post([&socket2] {
-                cout << "A new client was added" << endl;
-            })
+            cout << "Result of " << buffer << "=" << result << endl;
+
+            cout << "Next mode (y/n)?" << endl;
+            cin >> input;
+
+            if (input == "y") kill == true;
         }
 
-        return 0;
     }
 
+    int parseExpressionAndCalculate(char data[]) {
+        int i = 0;
+        int num1, num2;
+        string numStr1, numStr2;
+        char operand;
+        while (data[i] != '' && data[i]) {
+            cout << data[i] << endl;
+            if (operand != '+' && operand != '-') { numStr1.push_back(data[i]); }
+            if (operand == '+' || operand == '-') { numStr2.push_back(data[i]); }
+            if (data[i] == '+' || data[i] == '-') { operand = data[i]; }
+            i++;
+        }
+        cout << numStr1 << endl;
+        cout << numStr2 << endl;
+        stringstream temp(numStr1);
+        temp >> num1;
+        stringstream temp2(numStr2);
+        temp2 >> num2;
+
+        if (operand == '+') {
+            return num1 + num2;
+        } else {
+            return num1 - num2;
+        }
+    }
+
+    void httpResponse() {
+        cout << "Servermode: httpResponse" << endl;
+        kill = false;
+        string input;
+        while (!kill) {
+            if (listen(socket1, clients) == 0)
+                printf("Listening\n");
+            else
+                printf("Error\n");
+            addr_size = sizeof serverStorage;
+            socket2 = accept(socket1, (struct sockaddr *) &serverStorage, &addr_size);
+            //cout << socket2 << " Connected" << endl;
+            int res = read(socket2, buffer, 1024);
+            string msg = "HTTP/1.0 200 OK \n"
+                         "Content-Type: text/html; charset=utf-8 \n"
+                         "\n"
+                         "<HTML><BODY>\n"
+                         "<H1> Hilsen. Du har koblet deg opp til min enkle web-tjener </h1>\n"
+                         "Header fra klient er:\n"
+                         "<UL>\n"
+                         "<LI> " + string(buffer, strlen(buffer)) + "</LI>\n"
+                                                                    "</UL>\n"
+                                                                    "</BODY></HTML>";
+            cout << "Error here" << endl;
+            const char *msgChar = msg.c_str();
+            cout << "Error here" << endl;
+            send(socket2, msgChar, strlen(msgChar), 0);
+            close(socket2);
+            cout << buffer << endl;
+            cout << "Next mode (y/n)?" << endl;
+            cin >> input;
+
+            if (input == "y") kill == true;
+        }
+
+    }
 
     void stop() {
-        taskHandlers.stop()
-        eventListener.stop();
+
     }
 
 };
 
 
 int main() {
-    Server test();
+    Server test(1);
+    test.basicCalculation();
+    test.httpResponse();
     return 0;
 }
