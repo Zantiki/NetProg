@@ -16,11 +16,11 @@
 
 using namespace std;
 
+//Todo: fix numberparser
+//Todo: buffer reset
 
 class Server {
 public:
-    /*Workers taskHandlers = Workers(10);
-    Workers eventListener = Workers(1);*/
     int socket1 = socket(AF_INET, SOCK_STREAM, 0);
     int socket2;
     int clients;
@@ -70,11 +70,15 @@ public:
             int result = parseExpressionAndCalculate(buffer);
 
             cout << "Result of " << buffer << "=" << result << endl;
-
+            stringstream temp("");
+            temp << result;
+            const char *msg = temp.str().c_str();
+            send(socket2, msg, strlen(msg), 0);
+            close(socket2);
             cout << "Next mode (y/n)?" << endl;
             cin >> input;
-
             if (input == "y") kill == true;
+
         }
 
     }
@@ -85,14 +89,12 @@ public:
         string numStr1, numStr2;
         char operand;
         while (data[i] != '' && data[i]) {
-            cout << data[i] << endl;
+            //cout << data[i] << endl;
             if (operand != '+' && operand != '-') { numStr1.push_back(data[i]); }
             if (operand == '+' || operand == '-') { numStr2.push_back(data[i]); }
             if (data[i] == '+' || data[i] == '-') { operand = data[i]; }
             i++;
         }
-        cout << numStr1 << endl;
-        cout << numStr2 << endl;
         stringstream temp(numStr1);
         temp >> num1;
         stringstream temp2(numStr2);
@@ -103,6 +105,44 @@ public:
         } else {
             return num1 - num2;
         }
+    }
+
+    void multipleClients(int clinumber) {
+        vector<int> clientSockets;
+        Workers clientHandler(clinumber);
+        string input;
+        clientHandler.start();
+        while (!kill) {
+            if (listen(socket1, clients) == 0)
+                printf("\nListening\n");
+            else
+                printf("Error\n");
+            addr_size = sizeof serverStorage;
+            int clientSocket = accept(socket1, (struct sockaddr *) &serverStorage, &addr_size);
+            cout << "A new client connected" << endl;
+            cout << clientSocket << endl;
+
+            clientHandler.post([clientSocket, this] {
+                char tempBuffer[1024];
+                int res = read(clientSocket, tempBuffer, 1024);
+                // cout << buffer << endl;
+                int result = parseExpressionAndCalculate(tempBuffer);
+                cout << "----THREAD RESULT----" << endl;
+                cout << this_thread::get_id() << endl;
+                cout << tempBuffer << endl;
+                cout << result << endl;
+                stringstream temp("");
+                temp << result;
+                const char *msg = temp.str().c_str();
+                send(clientSocket, msg, strlen(msg), 0);
+                close(clientSocket);
+            });
+            //cout << socket2 << " Connected" << endl;
+            //send(socket2, msg, strlen(msg), 0 );
+            // send(socket2, msg, strlen(msg), 0 );
+        }
+        clientHandler.stop();
+        kill = true;
     }
 
     void httpResponse() {
@@ -151,7 +191,8 @@ public:
 
 int main() {
     Server test(1);
-    test.basicCalculation();
-    test.httpResponse();
+    //test.basicCalculation();
+    test.multipleClients(2);
+    // test.httpResponse();
     return 0;
 }

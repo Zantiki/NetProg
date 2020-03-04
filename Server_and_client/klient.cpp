@@ -15,6 +15,7 @@
 #include <cstring>
 #include <string>
 #include <iostream>
+#include "../WorkerThreads.cpp"
 
 using namespace std;
 
@@ -46,9 +47,12 @@ public:
     char buffer[1024];
     struct sockaddr_in serverAddr;
     size_t addr_size = sizeof serverAddr;
+    int port;
+    mutex mtx;
 
     Connection(const char *host, int port) {
         socklen_t addr_size;
+        this->port = port;
         // Create the socket.
         clientSocket = socket(PF_INET, SOCK_STREAM, 0);
         //Configure settings of the server address
@@ -62,7 +66,7 @@ public:
         //Connect the socket to the server using the address
     }
 
-    void connectToServer() {
+    void basicConnect() {
         connect(clientSocket, (struct sockaddr *) &serverAddr, addr_size);
         char firstnum, secondum;
         string operand;
@@ -83,15 +87,57 @@ public:
         cout << expression << endl;
         const char *msg = expression.c_str();
         send(clientSocket, msg, strlen(msg), 0);
-        cout << "Connected, allegedly..." << endl;
-        //read(clientSocket, buffer, 1024 );
+        read(clientSocket, buffer, 1024);
         cout << buffer << endl;
+    }
+
+    void manyConnects(int connects) {
+        Workers conHandler(connects);
+        int tempPort = port;
+        conHandler.start();
+        while (connects != 0) {
+            int tempSocket = socket(PF_INET, SOCK_STREAM, 0);
+            cout << tempSocket << endl;
+            conHandler.post([tempSocket, tempPort] {
+                struct sockaddr_in serverAddr2;
+                size_t addr_size2 = sizeof serverAddr2;
+                serverAddr2.sin_family = AF_INET;
+                //Set port number, using htons function
+                serverAddr2.sin_port = htons(tempPort);
+                //Set IP address to localhost'
+                serverAddr2.sin_addr.s_addr = inet_addr("127.0.0.1");
+                memset(serverAddr2.sin_zero, '\0', sizeof serverAddr2.sin_zero);
+                char tempBuffer[1024];
+                char message[1024];
+                char firstnum = '52';
+                char secondum = '100';
+                string operand = "+";
+                string expression;
+                expression = string(1, firstnum) + operand + string(1, secondum);
+                const char *msg = expression.c_str();
+                int constate;
+                constate = connect(tempSocket, (struct sockaddr *) &serverAddr2, addr_size2);
+                while (constate != 0) {
+                    constate = connect(tempSocket, (struct sockaddr *) &serverAddr2, addr_size2);
+                }
+                //connect(tempSocket, (struct sockaddr *) &serverAddr, addr_size);
+                send(tempSocket, msg, strlen(msg), 0);
+                recv(tempSocket, message, 1024, 0);
+                cout << this_thread::get_id() << endl;
+                cout << message << endl;
+                close(tempSocket);
+            });
+            connects--;
+        }
+        conHandler.stop();
+
+
     }
 };
 
 int main() {
-
     Connection con("localhost", 8080);
-    con.connectToServer();
+    // con.basicConnect();
+    con.manyConnects(2);
     return 0;
 }
