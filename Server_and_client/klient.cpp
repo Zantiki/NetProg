@@ -44,7 +44,6 @@ class Connection {
 
 public:
     int clientSocket;
-    char buffer[1024];
     struct sockaddr_in serverAddr;
     size_t addr_size = sizeof serverAddr;
     int port;
@@ -66,39 +65,64 @@ public:
         //Connect the socket to the server using the address
     }
 
-    void basicConnect() {
-        connect(clientSocket, (struct sockaddr *) &serverAddr, addr_size);
-        char firstnum, secondum;
-        string operand;
-        string expression;
-        cout << "First number\n" << endl;
-        cin >> firstnum;
-        while (operand != "+" && operand != "-") {
-            cout << "plus or minus?\n" << endl;
-            cin >> operand;
-            if (operand != "+" && operand != "-") {
-                cout << "you wrote: " << operand << ", an invalid operator \n" << endl;
-            }
-        }
-        cout << "Second number\n" << endl;
-        cin >> secondum;
-
-        expression = string(1, firstnum) + operand + string(1, secondum);
-        cout << expression << endl;
-        const char *msg = expression.c_str();
-        send(clientSocket, msg, strlen(msg), 0);
-        read(clientSocket, buffer, 1024);
-        cout << buffer << endl;
+    void closeCon() {
+        close(clientSocket);
     }
 
-    void manyConnects(int connects) {
+    void basicConnect() {
+        bool kill = false;
+        string input;
+        connect(clientSocket, (struct sockaddr *) &serverAddr, addr_size);
+        while (!kill) {
+            char buffer[1024];
+            int firstnum, secondum;
+            string operand;
+            string expression;
+            cout << "First number\n" << endl;
+            cin >> firstnum;
+            while (operand != "+" && operand != "-") {
+                cout << "plus or minus?\n" << endl;
+                cin >> operand;
+                if (operand != "+" && operand != "-") {
+                    cout << "you wrote: " << operand << ", an invalid operator \n" << endl;
+                }
+            }
+            cout << "Second number\n" << endl;
+            cin >> secondum;
+
+            //expression = firstnum + operand + secondum;
+            cout << expression << endl;
+            int op = 0;
+            if (operand == "+") {
+                op = 0;
+            } else {
+                op = 1;
+            }
+
+            int msg[] = {firstnum, secondum, op};
+            /*int con = connect(clientSocket, (struct sockaddr *) &serverAddr, addr_size);
+            while( send(clientSocket, msg, 1024, 0) < 0 || con != 0){
+                cout << con << endl;
+                con = connect(clientSocket, (struct sockaddr *) &serverAddr, addr_size);
+            };*/
+            send(clientSocket, msg, 1024, 0);
+            read(clientSocket, buffer, 1024);
+            cout << buffer << endl;
+            //close(clientSocket);
+            cout << "Next mode (y/n)?" << endl;
+            cin >> input;
+            if (input == "y") kill = true;
+        }
+    }
+
+    void manyConnects(int connects, int firstnum, int secondum, int op) {
         Workers conHandler(connects);
         int tempPort = port;
         conHandler.start();
         while (connects != 0) {
             int tempSocket = socket(PF_INET, SOCK_STREAM, 0);
             cout << tempSocket << endl;
-            conHandler.post([tempSocket, tempPort] {
+            conHandler.post([tempSocket, tempPort, firstnum, secondum, op] {
                 struct sockaddr_in serverAddr2;
                 size_t addr_size2 = sizeof serverAddr2;
                 serverAddr2.sin_family = AF_INET;
@@ -109,21 +133,20 @@ public:
                 memset(serverAddr2.sin_zero, '\0', sizeof serverAddr2.sin_zero);
                 char tempBuffer[1024];
                 char message[1024];
-                char firstnum = '52';
-                char secondum = '100';
-                string operand = "+";
+                int operand = op;
                 string expression;
-                expression = string(1, firstnum) + operand + string(1, secondum);
-                const char *msg = expression.c_str();
+                // expression = firstnum + operand + secondum;
+                int msg[] = {firstnum, secondum, operand};
                 int constate;
                 constate = connect(tempSocket, (struct sockaddr *) &serverAddr2, addr_size2);
-                while (constate != 0) {
+                /*while (constate != 0) {
                     constate = connect(tempSocket, (struct sockaddr *) &serverAddr2, addr_size2);
-                }
+                }*/
                 //connect(tempSocket, (struct sockaddr *) &serverAddr, addr_size);
-                send(tempSocket, msg, strlen(msg), 0);
+                send(tempSocket, msg, 1024, 0);
                 recv(tempSocket, message, 1024, 0);
                 cout << this_thread::get_id() << endl;
+                cout << "See answer blow UwU" << endl;
                 cout << message << endl;
                 close(tempSocket);
             });
@@ -136,8 +159,34 @@ public:
 };
 
 int main() {
-    Connection con("localhost", 8080);
-    // con.basicConnect();
-    con.manyConnects(2);
+    Connection con("localhost", 9000);
+
+    int firstnum, secondum;
+    string operand;
+    string expression;
+    cout << "First number\n" << endl;
+    cin >> firstnum;
+    while (operand != "+" && operand != "-") {
+        cout << "plus or minus?\n" << endl;
+        cin >> operand;
+        if (operand != "+" && operand != "-") {
+            cout << "you wrote: " << operand << ", an invalid operator \n" << endl;
+        }
+    }
+    cout << "Second number\n" << endl;
+    cin >> secondum;
+
+    //expression = firstnum + operand + secondum;
+    cout << expression << endl;
+    int op = 0;
+    if (operand == "+") {
+        op = 0;
+    } else {
+        op = 1;
+    }
+    con.manyConnects(1, firstnum, secondum, op);
+    cout << "\n\n\n\n\n" << endl;
+    //con.basicConnect();
+    con.manyConnects(10, firstnum, secondum, op);
     return 0;
 }
